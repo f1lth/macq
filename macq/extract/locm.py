@@ -18,39 +18,6 @@ from .exceptions import IncompatibleObservationToken
 from .learned_fluent import LearnedFluent
 from .model import Model
 
-'''
-=================================================================
-LOCM2 (multiple parameterized state machines for a single object)
-=================================================================
-central thesis: transition-centered representation (old=object-centered)
-                aka: behaviour of each sort represented by multiple FSM, where
-		    each machine is characterized by set of transitions
-terms: 
-	well-formed (transition matrix) {
-		- a matrix is NOT well formed if for any <r,r',c,c'>
-		  exists an identical (overlapping pattern) in transitions
-            1  2  3  4  5
-          1 x     x  x
-          2    x                - this transition matrix is NOT well formed because the fingerprint is 
-          3 x     x  x          - detected rows 1 and 3 (r,r') share overlapping fingerprint
-          4       x     x
-          5 x  x
-
-	}
-	
-	holes {
-  	          - a transition pair not observed in the data 
-		- appear when a transition matrix is not well formed
-		- LOCM2 will search for FSMs to represent the holes
-	}
-	
-	Valid transition subset {
-		- 
-
-
-
-'''
-
 
 @dataclass
 class AP:

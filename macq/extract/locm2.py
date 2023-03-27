@@ -2,6 +2,8 @@
 
 
 import itertools
+import numpy as np
+
 from collections import defaultdict
 from collections.abc import Set as SetClass
 from dataclasses import asdict, dataclass
@@ -17,6 +19,40 @@ from . import LearnedAction, Model
 from .exceptions import IncompatibleObservationToken
 from .learned_fluent import LearnedFluent
 from .model import Model
+
+
+'''
+=================================================================
+LOCM2 (multiple parameterized state machines for a single object)
+=================================================================
+central thesis: transition-centered representation (old=object-centered)
+                aka: behaviour of each sort represented by multiple FSM, where
+		    each machine is characterized by set of transitions
+terms: 
+	well-formed (transition matrix) {
+		- a matrix is NOT well formed if for any <r,r',c,c'>
+		  exists an identical (overlapping pattern) in transitions
+            1  2  3  4  5
+          1 x     x  x
+          2    x                - this transition matrix is NOT well formed because the fingerprint is 
+          3 x     x  x          - detected rows 1 and 3 (r,r') share overlapping fingerprint
+          4       x     x
+          5 x  x
+
+	}
+	
+	holes {
+  	          - a transition pair not observed in the data 
+		- appear when a transition matrix is not well formed
+		- LOCM2 will search for FSMs to represent the holes
+	}
+	
+	Valid transition subset {
+		- 
+
+
+
+'''
 
 
 @dataclass
@@ -141,7 +177,7 @@ class LOCM:
     zero_obj = PlanningObject("zero", "zero")
 
     def __new__(
-        cls, obs_tracelist: ObservedTraceList, statics=None, viz=False, debug=False
+        cls, obs_tracelist: ObservedTraceList, statics=None, viz=True, debug=False
     ):
         """Creates a new Model object.
         Args:
@@ -174,6 +210,72 @@ class LOCM:
                 sm.render(view=True)  # type: ignore
 
         return Model(fluents, actions)
+    
+    @staticmethod
+    def _get_transition_matrix(TS: TSType, debug=False) -> Dict[int, Dict[int, int]]:
+        """Create a transition matrix from the TS.
+        Args:
+            TS (TSType):
+                Ordered list of transition sequences for each object
+        """
+        if debug:
+            print(TS)
+        
+        unique_actions = set()
+        for i, x in enumerate(TS.items()):
+            # skip zero object
+            if i != 0:
+                # get the unique actions
+                for _, aps in x[1].items():
+                    for ap in aps:
+                        unique_actions.add(ap.action.name)
+
+        action_mappings = dict()
+        for i, a in enumerate(unique_actions):
+            action_mappings[a] = i
+
+        # create n x n matrix to hold connections
+        transition_matrix = np.zeros((len(unique_actions), len(unique_actions)))
+        for i, x in enumerate(TS.items()):
+            # skip zero object
+            if i != 0:
+                # loop over consecutive transtions for each object
+                for _, aps in x[1].items():
+                    for j in range(len(aps)):
+                        a = aps[j]
+                        a_prime = aps[j+1] if j+1 < len(aps) else None
+
+                        if debug:
+                            print(f"({a.action.name}, {a_prime.action.name})")
+
+                        if a_prime is not None:
+                            # get action indices
+                            a = action_mappings[a.action.name]
+                            a_prime = action_mappings[a_prime.action.name]
+                            # mark in matrix
+                            transition_matrix[a][a_prime] = 1
+                        
+        if debug:
+            pprint(transition_matrix)
+        
+        return transition_matrix
+    
+    @staticmethod
+    def _is_well_formed(transition_matrix: Dict[int, Dict[int, int]], debug=False) -> bool:
+        """Check to see if matrix is well formed.
+            --> No two rows are identical
+        Args:
+            transition_matrix (Dict[int, Dict[int, int]]):
+                Matrix of connections between action states
+        """
+        for i, r in enumerate(transition_matrix):
+            for j, r_prime in enumerate(transition_matrix):
+                if i != j:
+                    if np.array_equal(r, r_prime):
+                        if debug:
+                            print(f"Row {i} is identical to row {j}")
+                        return False
+        return True
 
     @staticmethod
     def _get_sorts(obs_trace: List[Observation], debug=False) -> Sorts:
