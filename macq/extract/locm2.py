@@ -1,6 +1,4 @@
-""".. include:: ../../docs/templates/extract/locm.md"""
-
-
+""".. include:: ../../docs/templates/extract/LOCM2.md"""
 import itertools
 import numpy as np
 
@@ -20,10 +18,9 @@ from .exceptions import IncompatibleObservationToken
 from .learned_fluent import LearnedFluent
 from .model import Model
 
-
 '''
 =================================================================
-LOCM2 (multiple parameterized state machines for a single object)
+LOCM22 (multiple parameterized state machines for a single object)
 =================================================================
 central thesis: transition-centered representation (old=object-centered)
                 aka: behaviour of each sort represented by multiple FSM, where
@@ -40,18 +37,11 @@ terms:
           5 x  x
 
 	}
-	
 	holes {
   	          - a transition pair not observed in the data 
 		- appear when a transition matrix is not well formed
-		- LOCM2 will search for FSMs to represent the holes
+		- LOCM22 will search for FSMs to represent the holes
 	}
-	
-	Valid transition subset {
-		- 
-
-
-
 '''
 
 
@@ -171,8 +161,8 @@ Binding = NamedTuple("Binding", [("hypothesis", Hypothesis), ("param", int)])
 Bindings = Dict[int, Dict[int, List[Binding]]]  # {sort: {state: [Binding]}}
 
 
-class LOCM:
-    """LOCM"""
+class LOCM2:
+    """LOCM2"""
 
     zero_obj = PlanningObject("zero", "zero")
 
@@ -188,24 +178,24 @@ class LOCM:
                 Raised if the observations are not identity observation.
         """
         if obs_tracelist.type is not ActionObservation:
-            raise IncompatibleObservationToken(obs_tracelist.type, LOCM)
+            raise IncompatibleObservationToken(obs_tracelist.type, LOCM2)
 
         if len(obs_tracelist) != 1:
-            warn("LOCM only supports a single trace, using first trace only")
+            warn("LOCM2 only supports a single trace, using first trace only")
 
         obs_trace = obs_tracelist[0]
         fluents, actions = None, None
 
-        sorts = LOCM._get_sorts(obs_trace, debug=debug)
-        TS, ap_state_pointers, OS = LOCM._step1(obs_trace, sorts)  # includes step 2
-        HS = LOCM._step3(TS, ap_state_pointers, OS, sorts)
-        bindings = LOCM._step4(HS)
-        bindings = LOCM._step5(HS, bindings)
+        sorts = LOCM2._get_sorts(obs_trace, debug=debug)
+        TS, ap_state_pointers, OS = LOCM2._step1(obs_trace, sorts)  # includes step 2
+        HS = LOCM2._step3(TS, ap_state_pointers, OS, sorts)
+        bindings = LOCM2._step4(HS)
+        bindings = LOCM2._step5(HS, bindings)
         # Step 6: Extraction of static preconditions
         # Step 7: Formation of PDDL action schema
 
         if viz:
-            state_machines = LOCM.get_state_machines(ap_state_pointers, OS, bindings)
+            state_machines = LOCM2.get_state_machines(ap_state_pointers, OS, bindings)
             for sm in state_machines:
                 sm.render(view=True)  # type: ignore
 
@@ -219,63 +209,128 @@ class LOCM:
                 Ordered list of transition sequences for each object
         """
         if debug:
-            print(TS)
-        
+            pprint(TS)
+
         unique_actions = set()
-        for i, x in enumerate(TS.items()):
-            # skip zero object
-            if i != 0:
-                # get the unique actions
-                for _, aps in x[1].items():
-                    for ap in aps:
-                        unique_actions.add(ap.action.name)
+        for obj_seq in TS.values():
+            for ap in obj_seq:
+                unique_actions.add(ap.action.name)
+
+        if debug:
+            print(unique_actions)
 
         action_mappings = dict()
         for i, a in enumerate(unique_actions):
             action_mappings[a] = i
 
+        # track holes
+        h = list()
         # create n x n matrix to hold connections
         transition_matrix = np.zeros((len(unique_actions), len(unique_actions)))
-        for i, x in enumerate(TS.items()):
-            # skip zero object
-            if i != 0:
-                # loop over consecutive transtions for each object
-                for _, aps in x[1].items():
-                    for j in range(len(aps)):
-                        a = aps[j]
-                        a_prime = aps[j+1] if j+1 < len(aps) else None
+        transition_mappings = defaultdict(set)
+        # loop thru all sequences
+        for obj_seq in TS.values():
+            for i in range(len(obj_seq)):
+                a = obj_seq[i]
+                a_prime = obj_seq[i+1] if i+1 < len(obj_seq) else None
 
-                        if debug:
-                            print(f"({a.action.name}, {a_prime.action.name})")
+                if debug:
+                    print(f"({a.action.name}, {a_prime.action.name})")
 
-                        if a_prime is not None:
-                            # get action indices
-                            a = action_mappings[a.action.name]
-                            a_prime = action_mappings[a_prime.action.name]
-                            # mark in matrix
-                            transition_matrix[a][a_prime] = 1
-                        
+                if a_prime is not None:
+                    # get action indices
+                    a = action_mappings[a.action.name]
+                    a_prime = action_mappings[a_prime.action.name]
+                    # mark in matrix
+                    transition_matrix[a][a_prime] = 1
+                    transition_mappings[a].add(a_prime)
+        
+        # fill in holes
+        temp = transition_mappings.copy()
+        temp_matrix = transition_matrix.copy()
+
+        for i in range(len(temp_matrix)):
+            set1 = temp[i]
+            for j in range(len(temp_matrix)):
+                set2 = temp[j]
+                if i != j:
+                    # if rows are identical that's okay
+                    if set1 == set2:
+                        continue
+                    # check if there is an intersection
+                    intersect = set1.intersection(set2)
+                    union = set1.union(set2)
+                    # if the intersect is empty set skip pair
+                    if not intersect:
+                        continue
+                    # fill in the holes  
+                    if intersect != set1:
+                        d1 = union.difference(set1)
+                        for k in d1:
+                            transition_matrix[i][k] = -1
+                            s = {i,k}
+                            h.append(s)
+                    if intersect != set2:
+                        d2 = union.difference(set2)
+                        for k in d2:
+                            transition_matrix[j][k] = -1
+                            s = {j,k}
+                            h.append(s)
         if debug:
             pprint(transition_matrix)
         
-        return transition_matrix
+        return transition_matrix, h
+    
+    @staticmethod
+    def _get_transition_matrix_by_sort(TS: TSType): 
+        """Create a transition matrix for each sort from the TS.
+        Args:
+            TS (TSType):
+                Ordered list of transition sequences for each object
+        """
+        transition_matrices = dict()
+        holes = defaultdict(list)
+        for sort, ts in TS.items():
+            if sort == 0:
+                continue
+            transition_matrices[sort], h = LOCM2._get_transition_matrix(ts)
+            holes[sort] = h
+        return transition_matrices, holes
     
     @staticmethod
     def _is_well_formed(transition_matrix: Dict[int, Dict[int, int]], debug=False) -> bool:
         """Check to see if matrix is well formed.
-            --> No two rows are identical
         Args:
             transition_matrix (Dict[int, Dict[int, int]]):
                 Matrix of connections between action states
         """
-        for i, r in enumerate(transition_matrix):
-            for j, r_prime in enumerate(transition_matrix):
+        for i in range(len(transition_matrix)):
+            for j in range(len(transition_matrix)):
                 if i != j:
-                    if np.array_equal(r, r_prime):
-                        if debug:
-                            print(f"Row {i} is identical to row {j}")
+                    # check if there is a -1 in any row
+                    if transition_matrix[i][j] == -1:
                         return False
         return True
+    
+    '''IfEis  a  set  of  ex-ample sequences,Srtis a sort,Tallis the set of all transi-tions observed inEforSrt,Pis the set of transition pairsobserved inEforSrt, andsis a subset ofTall.  A transi-tion connection matrixMis formed fromsusing all pairs〈t1, t2〉 ∈Psuch that{t1, t2} ⊆s.sis deemed to be validiff:•Mis well-formed by Definition 1, and•Mcan be validated against the example sequencesE.'''
+    @staticmethod
+    def _is_valid_transition_subset(E, Srt, Tall, P, s, M):
+        """ Check if a transition subset is valid.
+        Args:
+            E (List[Dict[str, List[ActionParam]]]):
+                List of example sequences
+            Srt (int):
+                Sort index
+            Tall (List[Tuple[int, int]]):
+                List of all transitions observed in E for Srt
+            P (List[Tuple[int, int]]):
+                List of transition pairs observed in E for Srt
+            s (List[Tuple[int, int]]):
+                Subset of Tall
+            M (Dict[int, Dict[int, int]]):
+                Transition connection matrix
+    """
+        pass
 
     @staticmethod
     def _get_sorts(obs_trace: List[Observation], debug=False) -> Sorts:
@@ -442,7 +497,7 @@ class LOCM:
         """
 
         # create the zero-object for zero analysis (step 2)
-        zero_obj = LOCM.zero_obj
+        zero_obj = LOCM2.zero_obj
 
         # collect action sequences for each object
         # used for step 5: looping over consecutive transitions for an object
@@ -486,7 +541,7 @@ class LOCM:
                 if prev_states is not None:
                     # get the state ids (indecies) of the state sets containing
                     # start(A.P) and the end state of the previous transition
-                    start_state, prev_end_state = LOCM._pointer_to_set(
+                    start_state, prev_end_state = LOCM2._pointer_to_set(
                         OS[sort], ap_states.start, prev_states.end
                     )
 
@@ -515,7 +570,7 @@ class LOCM:
     ) -> Hypotheses:
         """Step 3: Induction of parameterised FSMs"""
 
-        zero_obj = LOCM.zero_obj
+        zero_obj = LOCM2.zero_obj
 
         # indexed by B.k and C.l for 3.2 matching hypotheses against transitions
         HS: Dict[HSIndex, Set[HSItem]] = defaultdict(set)
@@ -550,7 +605,7 @@ class LOCM:
                             if sorts[Cl_.name] == G_:
                                 # check that end(B.P) = start(C.P)
                                 # NOTE: just a sanity check, should never fail
-                                S, S2 = LOCM._pointer_to_set(
+                                S, S2 = LOCM2._pointer_to_set(
                                     OS[G],
                                     ap_state_pointers[G][B].end,
                                     ap_state_pointers[G][C].start,
@@ -639,7 +694,7 @@ class LOCM:
                             v2 = state_bindings[h2]
 
                             # get the parameter sets P1, P2 that v1, v2 belong to
-                            P1, P2 = LOCM._pointer_to_set(state_params, v1, v2)
+                            P1, P2 = LOCM2._pointer_to_set(state_params, v1, v2)
 
                             if P1 != P2:
                                 # merge P1 and P2
@@ -652,7 +707,7 @@ class LOCM:
                 # add state bindings for the sort to the output bindings
                 # replacing hypothesis params with actual state params
                 bindings[sort][state] = [
-                    Binding(h, LOCM._pointer_to_set(state_params, v)[0])
+                    Binding(h, LOCM2._pointer_to_set(state_params, v)[0])
                     for h, v in state_bindings.items()
                 ]
 
@@ -745,6 +800,57 @@ class LOCM:
         # state_params.add(binding.param)
 
     @staticmethod
+    def _locm2(T_all, H, P, E):
+        """LOCM2 algorithm
+        Params: T_all : set of observed transition for a sort
+                H : set of Holes -
+                P : set of pairs t1,t2 consecutive transitions
+                E : set of example sequences of action
+        """
+        
+        '''
+        s = {}
+
+        for each h in H:
+            if there isnt a set s in S st. h is a proper-subset of s:
+                by BFS form s, the smallest set st:
+                    h proper-subset s subset t_all 
+                    AND
+                    s is valid wrt P, E by definition Valid transition subset
+        end 
+        '''
+        S = set()
+        for h in H:
+            # check if there is a set s in S st. h is a proper-subset of s
+            if not any(h.issubset(s) for s in S):
+                # form s by breadth-first search, the smallest set st:
+                # h proper-subset s subset t_all
+                # AND
+                # s is valid wrt P, E by definition Valid transition subset
+                
+                
+        '''
+        for any 2 sets s1, s2 in S:
+            if s1 subset s2:
+                S <- S - s1
+        end
+        '''
+        for s1, s2 in itertools.combinations(S, 2):
+            if s1.issubset(s2):
+                S.remove(s1)
+        '''
+
+        S <- S U {T_all}
+
+        return S
+
+        '''
+        S.add(T_all)
+        return S
+        pass
+
+
+    @staticmethod
     def get_state_machines(
         ap_state_pointers: APStatePointers,
         OS: OSType,
@@ -754,7 +860,7 @@ class LOCM:
 
         state_machines = []
         for (sort, trans), states in zip(ap_state_pointers.items(), OS.values()):
-            graph = Digraph(f"LOCM-step1-sort{sort}")
+            graph = Digraph(f"LOCM2-step1-sort{sort}")
             for state in range(len(states)):
                 label = f"state{state}"
                 if (
@@ -771,7 +877,7 @@ class LOCM:
                     label += f"]"
                 graph.node(str(state), label=label, shape="oval")
             for ap, apstate in trans.items():
-                start_idx, end_idx = LOCM._pointer_to_set(
+                start_idx, end_idx = LOCM2._pointer_to_set(
                     states, apstate.start, apstate.end
                 )
                 graph.edge(

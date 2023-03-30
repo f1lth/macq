@@ -501,4 +501,4 @@ if __name__ == "__main__":
     # test_locm_step4()
     # test_locm_step5()
     test_locm_step7()
-    # locm_viz()
+    locm_viz()

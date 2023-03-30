@@ -5,18 +5,16 @@ from typing import Dict, List, Tuple
 from graphviz import Digraph
 
 from macq.extract import Extract, modes
-from macq.extract.locm2 import AP, LOCM, Hypothesis
+from macq.extract.locm2 import AP, LOCM2, Hypothesis
 from macq.generate.pddl import *
 from macq.observation import ActionObservation
 from macq.trace import *
 
 EX = 1
 
-
 def get_fluent(name: str, objs: List[str]):
     objects = [PlanningObject(o.split()[0], o.split()[1]) for o in objs]
     return Fluent(name, objects)
-
 
 def test_locm():
     # base = Path(__file__).parent.parent
@@ -27,7 +25,7 @@ def test_locm():
     generator = FDRandomWalkSampling(problem_id=2688, init_h=350, num_traces=1)
     traces = generator.traces
     observations = traces.tokenize(ActionObservation)
-    model = Extract(observations, modes.LOCM, debug=False)
+    model = Extract(observations, modes.LOCM2, debug=False)
     assert model
 
     # model_blocks_dom = str(
@@ -39,7 +37,6 @@ def test_locm():
     # model.to_pddl(
     #     "model_blocks_dom", "model_blocks_prob", model_blocks_dom, model_blocks_prob
     # )
-
 
 def get_example_obs(print_trace=False):
     objects = {
@@ -173,7 +170,7 @@ def test_locm_get_sorts(is_test=True):
 
     obs = get_example_obs(is_test)
 
-    sorts = LOCM._get_sorts(obs[0])
+    sorts = LOCM2._get_sorts(obs[0])
 
     if is_test:
         print("testing on real traces...")
@@ -183,12 +180,12 @@ def test_locm_get_sorts(is_test=True):
             traces = generator.traces
             observations = traces.tokenize(ActionObservation)
             try:
-                LOCM._get_sorts(observations[0], debug=False)
+                LOCM2._get_sorts(observations[0], debug=False)
             except:
                 failed = True
                 traces.print()
                 print("----- begin debug log -----")
-                LOCM._get_sorts(observations[0], debug=True)
+                LOCM2._get_sorts(observations[0], debug=True)
                 break
 
         assert not failed, "Error getting sorts for one or more driverlog traces"
@@ -207,7 +204,7 @@ def test_locm_get_sorts(is_test=True):
 def test_locm_step1(is_test=True):
     obs = get_example_obs(False)
     sorts = test_locm_get_sorts(False)
-    ts, ap_state_pointers, os = LOCM._step1(obs[0], sorts)  # type: ignore
+    ts, ap_state_pointers, os = LOCM2._step1(obs[0], sorts)  # type: ignore
 
     if is_test:
         print("state pointers:")
@@ -224,7 +221,7 @@ def test_locm_step1(is_test=True):
 def test_locm_step3(is_test=True):
     sorts = test_locm_get_sorts(False)
     TS, ap_state_pointers, OS = test_locm_step1(False)  # type: ignore
-    HS = LOCM._step3(TS, ap_state_pointers, OS, sorts)  # type: ignore
+    HS = LOCM2._step3(TS, ap_state_pointers, OS, sorts)  # type: ignore
     if is_test:
         print("HS:")
         pprint(HS)
@@ -356,7 +353,7 @@ def test_locm_step4(HS=None, is_test=True):
                 }
             }
         }
-    bindings = LOCM._step4(HS)
+    bindings = LOCM2._step4(HS)
 
     if is_test:
         print("bindings:")
@@ -445,7 +442,7 @@ def test_locm_step5(is_test=True):
             for h, v in bGS:
                 print(f"{h} -> {v}\n")
 
-    bindings = LOCM._step5(HS, bindings)  # type: ignore
+    bindings = LOCM2._step5(HS, bindings)  # type: ignore
 
     print("\nbindings after:")
     for G, bG in bindings.items():
@@ -458,21 +455,21 @@ def test_locm_step5(is_test=True):
 def test_locm_step7():
     sorts = test_locm_get_sorts(False)
     TS, ap_state_pointers, OS = test_locm_step1(False)  # type: ignore
-    HS = LOCM._step3(TS, ap_state_pointers, OS, sorts)  # type: ignore
-    bindings = LOCM._step4(HS)  # type: ignore
-    bindings = LOCM._step5(HS, bindings)  # type: ignore
+    HS = LOCM2._step3(TS, ap_state_pointers, OS, sorts)  # type: ignore
+    bindings = LOCM2._step4(HS)  # type: ignore
+    bindings = LOCM2._step5(HS, bindings)  # type: ignore
 
     print()
     print("bindings:")
     print(bindings)
     print()
 
-    LOCM._step7(OS, sorts, bindings)  # type: ignore
+    LOCM2._step7(OS, sorts, bindings)  # type: ignore
 
 
-def locm_viz():
-    # _, ap_state_pointers, OS = test_locm_step1(False)  # type: ignore
-    # state_machines: List[Digraph] = LOCM.get_state_machines(ap_state_pointers, OS)
+def LOCM2_viz():
+    # _, ap_state_pointers, OS = test_LOCM2_step1(False)  # type: ignore
+    # state_machines: List[Digraph] = LOCM2.get_state_machines(ap_state_pointers, OS)
 
     # generator = FDRandomWalkSampling(problem_id=2688, init_h=3010, num_traces=1)
     # traces = generator.traces
@@ -482,31 +479,29 @@ def locm_viz():
     sorts = test_locm_get_sorts(False)
     TS, ap_state_pointers, OS = test_locm_step1(False)  # type: ignore
     pprint(TS)
-    HS = LOCM._step3(TS, ap_state_pointers, OS, sorts)  # type: ignore
+    HS = LOCM2._step3(TS, ap_state_pointers, OS, sorts)  # type: ignore
     print(HS)
-    bindings = LOCM._step4(HS)  # type: ignore
+    bindings = LOCM2._step4(HS)  # type: ignore
     print(bindings)
-    bindings = LOCM._step5(HS, bindings)  # type: ignore
+    bindings = LOCM2._step5(HS, bindings)  # type: ignore
     print(bindings)
-    state_machines = LOCM.get_state_machines(ap_state_pointers, OS, bindings)  # type: ignore
+    state_machines = LOCM2.get_state_machines(ap_state_pointers, OS, bindings)  # type: ignore
 
     '''
     for sm in state_machines:
         sm.render(view=True)
     '''
 
-
 def test_transition_matrix():
     TS, ap_state_pointers, OS = test_locm_step1(False)  # type: ignore
-    transition_matrix = LOCM._get_transition_matrix(TS, False)  # type: ignore
-    pprint(transition_matrix)
-
-    print(LOCM._is_well_formed(transition_matrix, False))  # type: ignore
+    pprint(TS)
+    transition_matrices, holes = LOCM2._get_transition_matrix_by_sort(TS)  # type: ignore
     
-     
-
+    pprint(transition_matrices)
+    pprint(holes)
+    for matrix in transition_matrices.values():
+        print(f"Is this matrix well formed?: {LOCM2._is_well_formed(matrix, False)}")
     
-
 
 if __name__ == "__main__":
     # test_locm()
