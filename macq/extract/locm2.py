@@ -800,54 +800,77 @@ class LOCM2:
         # state_params.add(binding.param)
 
     @staticmethod
+    def bfs(h, T_all, H, P, E, S):
+        """ Breadth-first search 
+        Params: etc etc
+        """
+
+        # form s by breadth-first search, the smallest set st:
+                # h proper-subset s subset t_all
+                # AND
+        # s is valid wrt P, E by definition Valid transition subset
+
+        ###
+        s = {}
+        s.union(h)
+
+        for e in T_all:
+            s.union(e)
+            if _check_one(h, s, T_all):
+                if _check_two(T_all):
+                    pass
+            
+        ''' 
+        
+        start with h
+        
+        s U h
+        add elements from t_all one at a time to s
+
+        check subsets
+        check validity    
+
+        return s    
+        '''
+
+        def _check_one(h, s, t):
+            c = {h}
+            if h.issubset(s) and h != s:
+                c.union(s)
+                if c.issubset(t):
+                    return c
+        
+        def _check_two(t):
+            m = LOCM2._get_transition_matrix_by_sort(t)
+            return LOCM2._is_well_formed(m)
+
+    pass        
+        
+
+    @staticmethod
     def _locm2(T_all, H, P, E):
         """LOCM2 algorithm
-        Params: T_all : set of observed transition for a sort
-                H : set of Holes -
-                P : set of pairs t1,t2 consecutive transitions
-                E : set of example sequences of action
+        Params: T_all : set of observed transition for a sort : ts[sort]
+                H : set of Holes                               : just H
+                P : set of Pairs t1,t2 consecutive transitions : ts[sort] t_1, t_2 pairs
+                E : set of example sequences of action         : big trace
         """
-        
-        '''
-        s = {}
-
-        for each h in H:
-            if there isnt a set s in S st. h is a proper-subset of s:
-                by BFS form s, the smallest set st:
-                    h proper-subset s subset t_all 
-                    AND
-                    s is valid wrt P, E by definition Valid transition subset
-        end 
-        '''
         S = set()
+        
         for h in H:
             # check if there is a set s in S st. h is a proper-subset of s
             if not any(h.issubset(s) for s in S):
-                # form s by breadth-first search, the smallest set st:
-                # h proper-subset s subset t_all
-                # AND
-                # s is valid wrt P, E by definition Valid transition subset
-                
-                
-        '''
-        for any 2 sets s1, s2 in S:
-            if s1 subset s2:
-                S <- S - s1
-        end
-        '''
+                s = bfs(h, T_all, H, P, E, S)
+
+                S.union(s)
+                       
         for s1, s2 in itertools.combinations(S, 2):
             if s1.issubset(s2):
                 S.remove(s1)
-        '''
-
-        S <- S U {T_all}
-
-        return S
-
-        '''
         S.add(T_all)
+
         return S
-        pass
+
 
 
     @staticmethod

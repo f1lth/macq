@@ -501,7 +501,14 @@ def test_transition_matrix():
     pprint(holes)
     for matrix in transition_matrices.values():
         print(f"Is this matrix well formed?: {LOCM2._is_well_formed(matrix, False)}")
-    
+
+    return transition_matrices, holes
+
+def test_locm2():
+    TS, ap_state_pointers, OS = test_locm_step1(False)  # type: ignore
+    M, H = test_transition_matrix()
+
+    LOCM2._locm2(TS, H, )
 
 if __name__ == "__main__":
     # test_locm()
